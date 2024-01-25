@@ -126,17 +126,65 @@ it never came back. As this is a rare occurrence, I fixed it in the simplest pos
 ESP32 on disconnection.
 <p>
 
-<h2 class="haiku">The finished product</h2>
+<h2 class="haiku">What went wrong</h2>
 <p>
-The final packaging for the ESP32 is somewhat rough. The plastic zip-lock bag keeps the dust off, while
-the elastic bands hold it in position.
+No matter how much I tweaked the algorithm, I couldn't get the sensor to reliably detect when the door
+was open or closed. It nearly always worked, but when you get a message saying the garage door is open
+when nobody is home, it's somewhat concerning.
 </p>
 <p>
-<img src="garage_monitor_2.jpg" alt="ESP32 monitoring garage door status" />
+This issue happened rarely enough that it was impossible to debug.
+</p>
+
+<h2 class="haiku">Ultrasonic distance sensor</h2>
+<p>
+I gave up on the Hall effect sensor, and purchased an HC-SR04 Ultrasonic Distance sensor. This sensor
+has four connectors &mdash; VCC, ground, trigger and echo. Connect VCC to +5V on the ESP32, ground
+to GND, trigger and echo to GPIO pins.
+</p>
+<p>
+<img src="garage_monitor_wiring.png" alt="ESP32 to HC-SR04 ultrasonic distance sensor wiring diagram" />
+</p>
+<p>
+<code>gpio_set_direction(TRIGGER_PIN, GPIO_MODE_OUTPUT);<br/>
+      gpio_set_direction(ECHO_PIN, GPIO_MODE_INPUT);</br>
+      ...<br/>
+      // set trigger pin high for 10us<br />
+      ESP_ERROR_CHECK(gpio_set_level(TRIGGER_PIN, 1));<br/>
+      usleep(10);<br/>
+      ESP_ERROR_CHECK(gpio_set_level(TRIGGER_PIN, 0));<br/>
+      ...<br/>
+      // wait for the echo pin to go high<br />
+      while( !gpio_get_level( ECHO_PIN ) );<br/>
+      int64_t start = esp_timer_get_time();<br/>
+      // wait for the echo pin to go low<br />
+      while( gpio_get_level( ECHO_PIN ) );<br/>
+      int64_t stop = esp_timer_get_time();</code>
+</p>
+<p>
+Just imagine that the code above contains a little more error checking to ensure we don't
+get stuck in and endless loop. My 
+<a class="ul" href="https://bitbucket.org/harshbutfair/garage/src/main/">code is on Bitbucket</a>
+if you want to see how I did it. Then to determine the distance:
+</p>
+<p>
+<code>int64_t time_diff = stop - start;  // microseconds<br />
+    // speed of sound 343m/s, half the distance to account for the sound<br />
+    // travelling there and back<br />
+    double distance = time_diff * 0.0343 * 0.5;   // centimetres</code>
+</p>
+<p>
+Then a simple threshold can be used to determine whether the door is open or closed. I set
+the threshold to 1 metre and placed the sensor approximately 65cm from the garage door.
+</p>
+<p>
+One advantage of an ultrasonic sensor is that they look like eyes, so for a bit of fun you
+can add a face and give your project a name. This is Gary, the garage door monitor.
 </p>
 <p>
 <img src="garage_monitor_1.jpg" alt="ESP32 monitoring garage door status" />
 </p>
+
 <p>
 Source code for this project can be found on <a class="ul"
     href="https://bitbucket.org/harshbutfair/garage/src/main/">Bitbucket</a>.
